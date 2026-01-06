@@ -1,0 +1,84 @@
+    import phantom.rules as phantom
+
+    phantom.debug("Starting cf_parse_otx_pulses")
+
+    ips = set()
+    domains = set()
+    urls = set()
+    hashes = set()
+
+    if not all_pulses:
+        phantom.debug("No all_pulses provided to parse_otx_pulses")
+        return {
+            "success": False,
+            "error": "No pulses provided",
+            "ips": [],
+            "domains": [],
+            "urls": [],
+            "hashes": []
+        }
+
+    if isinstance(all_pulses, list) and len(all_pulses) > 0:
+        # If first element is a list, flatten one level
+        if isinstance(all_pulses[0], list):
+            phantom.debug("Flattening nested all_pulses list from [[...]] to [...]")
+            flattened = []
+            for row in all_pulses:
+                if isinstance(row, list):
+                    flattened.extend(row)
+                elif isinstance(row, dict):
+                    flattened.append(row)
+            all_pulses = flattened
+
+    # At this point, all_pulses should be a list of pulse dicts
+    try:
+        for pulse in all_pulses:
+            if not isinstance(pulse, dict):
+                continue
+
+            indicators = pulse.get("indicators", [])
+            for i in indicators:
+                indicator_type = i.get("type")
+                value = i.get("indicator")
+                if not value:
+                    continue
+
+                # Normalize types from OTX
+                if indicator_type in ("IPv4", "IPv6", "ip", "IPv4Address", "IPv6Address"):
+                    ips.add(value)
+                elif indicator_type in ("domain", "hostname", "FQDN"):
+                    domains.add(value)
+                elif indicator_type in ("URL", "url"):
+                    urls.add(value)
+                elif indicator_type in (
+                    "FileHash-MD5", "FileHash-SHA1", "FileHash-SHA256",
+                    "md5", "sha1", "sha256"
+                ):
+                    hashes.add(value)
+                else:
+                    # Skip unsupported types (e.g. CVE, email, etc.)
+                    continue
+
+        phantom.debug(
+            f"Parsed {len(ips)} IPs, {len(domains)} domains, "
+            f"{len(urls)} URLs, {len(hashes)} hashes"
+        )
+
+        return {
+            "success": True,
+            "ips": list(ips),
+            "domains": list(domains),
+            "urls": list(urls),
+            "hashes": list(hashes)
+        }
+
+    except Exception as e:
+        phantom.debug(f"Exception in parse_otx_pulses: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "ips": list(ips),
+            "domains": list(domains),
+            "urls": list(urls),
+            "hashes": list(hashes)
+        }
